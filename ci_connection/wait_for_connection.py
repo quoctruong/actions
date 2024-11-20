@@ -20,6 +20,7 @@ import logging
 import os
 import shutil
 import time
+import platform
 
 import preserve_run_state
 import utils
@@ -148,11 +149,14 @@ async def process_messages(reader, writer):
 
 async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   # Print out the data required to connect to this VM
-  runner_name = os.getenv("HOSTNAME")
+  runner_name = os.getenv("CONNECTION_POD_NAME")
   cluster = os.getenv("CONNECTION_CLUSTER")
   location = os.getenv("CONNECTION_LOCATION")
   ns = os.getenv("CONNECTION_NS")
   actions_path = os.path.dirname(__file__)
+
+  if platform.system() == "Windows":
+    actions_path = actions_path.replace("\\", "\\\\")
 
   logging.info("Googler connection only\nSee go/ml-github-actions:connect for details")
   logging.info(

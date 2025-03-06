@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/bradleyfalzon/ghinstallation/v2"
 	"github.com/google/go-github/v52/github"
 	"golang.org/x/oauth2"
 )
@@ -51,7 +54,7 @@ type WorkflowRunData struct {
 	LastUpdatedAt time.Time      `json:"last_updated_at"`
 }
 
-// Var to track the total requests for debugging purposes in relation to GitHub API limitations
+// Var to track the total requests for debugging purposes in relation to Github API limitations
 var totalRequests int = 0
 
 // Our deepest query can go way too fast for github api, we limit number of simletainous queries for job data
@@ -59,15 +62,14 @@ var limiterChannel = make(chan int, channelLimiting)
 
 func main() {
 	// 1. Read configuration from environment variables.
-	repoOwner, repoName, githubToken, targetBranch := readConfig()
+	repoOwner, repoName, targetBranch := readRepoConfig()
 
-	// 2. Create a GitHub client.
+	// 2. Create a Github client.
 	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: githubToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
+	client, err := getGithubClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to construct GitHub Client %v", err)
+	}
 
 	log.Printf("Getting data for Org:%s Repo:%s\n", repoOwner, repoName)
 
@@ -118,11 +120,40 @@ func main() {
 	fmt.Println("Workflow run data successfully gathered and stored.")
 }
 
-// readConfig reads configuration from environment variables.
-func readConfig() (string, string, string, string) {
+// Creates a Github client that is authenticated either with Github Token
+// or Github App.
+func getGithubClient(ctx context.Context) (*github.Client, error) {
+	if githubToken, ok := os.LookupEnv("GH_TOKEN"); ok {
+		fmt.Println("Using GitHub Token to authenticate")
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: githubToken},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+		return github.NewClient(tc), nil
+	}
+
+	fmt.Println("Using GitHub App to authenticate")
+	githubAppId, githubAppInstallationId, githubPrivateKey, err := readGithubAppConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Github App ID %v installation ID %v", githubAppId, githubAppInstallationId)
+	// Wrap the shared transport for use with the integration ID 1 authenticating with installation ID 99.
+	itr, err := ghinstallation.New(http.DefaultTransport, githubAppId, githubAppInstallationId, []byte(githubPrivateKey))
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Use installation transport with client.
+	return github.NewClient(&http.Client{Transport: itr}), nil
+}
+
+// readConfig reads configuration for the repository from environment variables.
+func readRepoConfig() (string, string, string) {
 	repoOwner := os.Getenv("GITHUB_REPOSITORY_ORG")
 	repoName := os.Getenv("GITHUB_REPOSITORY_NAME")
-	githubToken := os.Getenv("GH_TOKEN")
 	targetBranch := os.Getenv("TARGET_BRANCH")
 
 	if repoOwner == "" {
@@ -133,16 +164,46 @@ func readConfig() (string, string, string, string) {
 		log.Fatal("Missing required environment variables: GITHUB_REPOSITORY_NAME")
 	}
 
-	if githubToken == "" {
-		log.Fatal("Missing required environment variables: GH_TOKEN")
-	}
-
 	if targetBranch == "" {
 		targetBranch = defaultBranch
 		log.Printf("TARGET_BRANCH not set, using default: %s", defaultBranch)
 	}
 
-	return repoOwner, repoName, githubToken, targetBranch
+	return repoOwner, repoName, targetBranch
+}
+
+// Reads configuration from environment variables for authenticating using
+// Github App.
+func readGithubAppConfig() (int64, int64, string, error) {
+	githubAppId, err := getIntEnvironmentVariable("GITHUB_APP_ID")
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	githubAppInstallationId, err := getIntEnvironmentVariable("GITHUB_APP_INSTALLATION_ID")
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	githubAppPrivateKey := os.Getenv("GITHUB_APP_PRIVATE_KEY")
+	if githubAppPrivateKey == "" {
+		return 0, 0, "", fmt.Errorf("missing required environment variables: GITHUB_APP_PRIVATE_KEY")
+	}
+
+	return githubAppId, githubAppInstallationId, githubAppPrivateKey, nil
+}
+
+func getIntEnvironmentVariable(envName string) (int64, error) {
+	rawValue, ok := os.LookupEnv(envName)
+	if !ok {
+		return 0, fmt.Errorf("missing environment variable: %v", envName)
+	}
+
+	intValue, err := strconv.ParseInt(rawValue, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert %v with error: %v", envName, err)
+	}
+	return intValue, nil
 }
 
 // getWorkflows retrieves all workflows for a repository.

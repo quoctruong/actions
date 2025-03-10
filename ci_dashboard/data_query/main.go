@@ -54,6 +54,13 @@ type WorkflowRunData struct {
 	LastUpdatedAt time.Time      `json:"last_updated_at"`
 }
 
+// GitHubAppConfig contains data needed to authenticate with a Github App Installation.
+type GitHubAppConfig struct {
+	GithubAppID             int64
+	GithubAppInstallationID int64
+	GithubAppPrivateKey     string
+}
+
 // Var to track the total requests for debugging purposes in relation to Github API limitations
 var totalRequests int = 0
 
@@ -133,14 +140,14 @@ func getGithubClient(ctx context.Context) (*github.Client, error) {
 	}
 
 	fmt.Println("Using GitHub App to authenticate")
-	githubAppId, githubAppInstallationId, githubPrivateKey, err := readGithubAppConfig()
+	githubAppConfig, err := readGithubAppConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Github App ID %v installation ID %v", githubAppId, githubAppInstallationId)
-	// Wrap the shared transport for use with the integration ID 1 authenticating with installation ID 99.
-	itr, err := ghinstallation.New(http.DefaultTransport, githubAppId, githubAppInstallationId, []byte(githubPrivateKey))
+	log.Printf("Github App ID %v installation ID %v", githubAppConfig.GithubAppID, githubAppConfig.GithubAppInstallationID)
+	// Wrap the shared transport for use with the app ID authenticating with installation ID.
+	itr, err := ghinstallation.New(http.DefaultTransport, githubAppConfig.GithubAppID, githubAppConfig.GithubAppInstallationID, []byte(githubAppConfig.GithubAppPrivateKey))
 
 	if err != nil {
 		return nil, err
@@ -174,23 +181,23 @@ func readRepoConfig() (string, string, string) {
 
 // Reads configuration from environment variables for authenticating using
 // Github App.
-func readGithubAppConfig() (int64, int64, string, error) {
+func readGithubAppConfig() (GitHubAppConfig, error) {
 	githubAppId, err := getIntEnvironmentVariable("GITHUB_APP_ID")
 	if err != nil {
-		return 0, 0, "", err
+		return GitHubAppConfig{}, err
 	}
 
 	githubAppInstallationId, err := getIntEnvironmentVariable("GITHUB_APP_INSTALLATION_ID")
 	if err != nil {
-		return 0, 0, "", err
+		return GitHubAppConfig{}, err
 	}
 
 	githubAppPrivateKey := os.Getenv("GITHUB_APP_PRIVATE_KEY")
 	if githubAppPrivateKey == "" {
-		return 0, 0, "", fmt.Errorf("missing required environment variables: GITHUB_APP_PRIVATE_KEY")
+		return GitHubAppConfig{}, fmt.Errorf("missing required environment variables: GITHUB_APP_PRIVATE_KEY")
 	}
 
-	return githubAppId, githubAppInstallationId, githubAppPrivateKey, nil
+	return GitHubAppConfig{githubAppId, githubAppInstallationId, githubAppPrivateKey}, nil
 }
 
 func getIntEnvironmentVariable(envName string) (int64, error) {

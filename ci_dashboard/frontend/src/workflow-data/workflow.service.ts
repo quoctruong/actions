@@ -8,7 +8,7 @@ import { WorkflowBundle, WorkflowData, StatusInfo } from './workflow-data';
   providedIn: 'root'
 })
 export class WorkflowService implements OnDestroy {
-  dataLocation = 'https://michaelhudgins.github.io/actions/data/workflow_runs.json'
+  dataLocation = 'https://storage.googleapis.com/download/storage/v1/b/ml-dashboard-data-gatherer/o/workflow_runs.json?alt=media'
   keyWorkflowNames: string[] = [
     'CI',
     'CI - Cloud TPU (nightly)',
@@ -34,7 +34,7 @@ export class WorkflowService implements OnDestroy {
     // Pull data every 4 minutes, data refreshes every 10 minutes
     this.bundle$ = timer(1, 1000 * 60 * 4).pipe(
       switchMap(() => http.get(this.dataLocation).pipe(map(data => {
-        console.log("Retreived new data")
+        console.log("Retrieved new data")
         // TODO: Merge results at the top level to prevent flickering / opening and closing of the expanion panels
         let wb: WorkflowBundle = {
           dateRetreived: Date.now(),

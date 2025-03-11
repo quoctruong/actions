@@ -8,7 +8,7 @@ import { WorkflowBundle, WorkflowData, StatusInfo } from './workflow-data';
   providedIn: 'root'
 })
 export class WorkflowService implements OnDestroy {
-  dataLocation = 'https://michaelhudgins.github.io/actions/data/workflow_runs.json'
+  dataLocation = 'https://storage.googleapis.com/ml-dashboard-data-gatherer/workflow_runs.json'
   keyWorkflowNames: string[] = [
     'CI',
     'CI - Cloud TPU (nightly)',

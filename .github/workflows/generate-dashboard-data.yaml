@@ -68,7 +68,7 @@ jobs:
         name: frontend
         path: ci_dashboard/frontend/dist/ci-dashboard/browser
   upload-site:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'push'
     needs: generate-json
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
@@ -81,12 +81,6 @@ jobs:
     # Specify runner + deployment step
     runs-on: ubuntu-latest
     steps:
-      - name: Download workflow files
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # ratchet:actions/download-artifact@v4
-        with:
-          path: data
-          pattern: workflow-run-*
-          merge-multiple: true
       - name: Download frontend files
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # ratchet:actions/download-artifact@v4
         with:
@@ -96,8 +90,6 @@ jobs:
         run: |
           ls -la
           mkdir final_site
-          mkdir final_site/data
-          cp data/* final_site/data/
           cp frontend/* final_site
           ls -la final_site/
           ls -la final_site/data/

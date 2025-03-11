@@ -1,8 +1,9 @@
 # Workflow to continuously regenerate the data for the ci dashboard
 name: Generate dashboard data
 on:
-  schedule:
-    - cron: '*/10 * * * *'
+  push:
+    branches:
+      - main
   pull_request:
     paths:
       - ci_dashboard/data_query/**
@@ -38,10 +39,6 @@ jobs:
         run: |
           cd ci_dashboard/data_query
           go run main.go
-      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # ratchet:actions/upload-artifact@v4
-        with:
-          name: workflow-run-main
-          path: ci_dashboard/data_query/workflow_runs.json
   generate-angular:
     runs-on: ubuntu-latest
 
